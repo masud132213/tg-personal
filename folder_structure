@@ -1,0 +1,12 @@
+your_bot_folder/
+├── bot.py
+├── image_processor.py
+├── group_management/
+│   ├── __init__.py
+│   ├── handlers.py
+│   ├── database.py
+│   ├── welcome.py
+│   └── filters.py
+├── requirements.txt
+├── Dockerfile
+└── .env 

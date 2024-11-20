@@ -83,19 +83,6 @@ class ImageProcessor:
             # Main text in white
             draw.text(main_text_position, main_text, font=main_font, fill=(255, 255, 255, 255))
             
-            # Subtitle text
-            sub_font_size = int(img.width * 0.045)  # Slightly increased
-            sub_font = ImageFont.truetype(self.font_path, sub_font_size)
-            sub_text = "আপনার পছন্দের সব মুভি / সিরিজ"
-            sub_text_width = draw.textlength(sub_text, font=sub_font)
-            sub_text_position = (int((img.width - sub_text_width) / 2), main_text_position[1] - sub_font_size - 10)
-            
-            # Add shadow to subtitle
-            for offset in [(x, y) for x in range(-2, 3) for y in range(-2, 3)]:
-                draw.text((sub_text_position[0] + offset[0], sub_text_position[1] + offset[1]),
-                         sub_text, font=sub_font, fill=(0, 0, 0, 100))
-            draw.text(sub_text_position, sub_text, font=sub_font, fill=(255, 255, 255, 255))
-            
             return img.convert('RGB')
             
         except Exception as e:
