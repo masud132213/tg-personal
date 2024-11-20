@@ -6,6 +6,8 @@ from image_processor import ImageProcessor
 import psutil, platform
 from datetime import datetime
 from template_generator.generator import TemplateGenerator
+from telegram.error import NetworkError, Unauthorized, BadRequest
+import time
 
 OWNER_IDS = [7202314047, 1826754085]
 AUTHORIZED_CHATS = [-1002385279104]
@@ -19,6 +21,8 @@ class PosterBot:
         self.image_processor = ImageProcessor()
         self.user_states = {}
         self.template_generator = TemplateGenerator()
+        self.max_retries = 5
+        self.retry_delay = 5  # seconds
         
         # Setup handlers
         self._setup_handlers()
@@ -479,56 +483,88 @@ class PosterBot:
                 update.message.reply_text(response)
 
     def run(self):
-        try:
-            # Create a unique name for this bot instance
-            import uuid
-            instance_name = str(uuid.uuid4())
-            
-            # Start the bot with unique name and clean start
-            self.updater.start_polling(
-                drop_pending_updates=True,
-                bootstrap_retries=-1,
-                allowed_updates=['message', 'callback_query'],
-                timeout=30
-            )
-            print(f"Bot instance {instance_name} is running...")
-
-            # Start health check server
-            from http.server import HTTPServer, BaseHTTPRequestHandler
-            
-            class HealthCheckHandler(BaseHTTPRequestHandler):
-                def do_GET(self):
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/plain')
-                    self.end_headers()
-                    self.wfile.write(b"OK")
+        """Run the bot with retry mechanism"""
+        retry_count = 0
+        while retry_count < self.max_retries:
+            try:
+                print(f"Starting bot (attempt {retry_count + 1})")
                 
-                def log_message(self, format, *args):
-                    pass
+                # Configure updater with larger timeout and retry settings
+                self.updater.bot.get_updates(timeout=60, allowed_updates=['message', 'callback_query'])
+                
+                # Start polling with clean start
+                self.updater.start_polling(
+                    drop_pending_updates=True,
+                    bootstrap_retries=5,
+                    read_timeout=30,
+                    timeout=30,
+                    allowed_updates=['message', 'callback_query']
+                )
+                print("Bot is running...")
 
-            def run_health_server():
-                try:
-                    server = HTTPServer(('', 8080), HealthCheckHandler)
-                    print("Health check server running on port 8080")
-                    server.serve_forever()
-                except Exception as e:
-                    print(f"Health server error: {e}")
+                # Start health check server
+                def run_health_server():
+                    from http.server import HTTPServer, BaseHTTPRequestHandler
+                    
+                    class HealthCheckHandler(BaseHTTPRequestHandler):
+                        def do_GET(self):
+                            self.send_response(200)
+                            self.send_header('Content-type', 'text/plain')
+                            self.end_headers()
+                            self.wfile.write(b"OK")
+                        
+                        def log_message(self, format, *args):
+                            pass
 
-            import threading
-            health_thread = threading.Thread(target=run_health_server, daemon=True)
-            health_thread.start()
+                    try:
+                        server = HTTPServer(('', 8080), HealthCheckHandler)
+                        print("Health check server running on port 8080")
+                        server.serve_forever()
+                    except Exception as e:
+                        print(f"Health server error: {e}")
 
-            # Keep the main thread running
-            self.updater.idle()
-            
-        except Exception as e:
-            print(f"Error starting bot: {e}")
-            raise e 
+                import threading
+                health_thread = threading.Thread(target=run_health_server, daemon=True)
+                health_thread.start()
+
+                # Keep the main thread running
+                self.updater.idle()
+                break  # If we get here, bot is running successfully
+                
+            except NetworkError as e:
+                print(f"Network error: {e}")
+                retry_count += 1
+                if retry_count < self.max_retries:
+                    print(f"Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                    continue
+                raise e
+                
+            except (Unauthorized, BadRequest) as e:
+                print(f"Fatal error: {e}")
+                raise e
+                
+            except Exception as e:
+                print(f"Unexpected error: {e}")
+                retry_count += 1
+                if retry_count < self.max_retries:
+                    print(f"Retrying in {self.retry_delay} seconds...")
+                    time.sleep(self.retry_delay)
+                    continue
+                raise e
 
 if __name__ == '__main__':
-    # Create necessary directories
-    os.makedirs('assets', exist_ok=True)
-    os.makedirs('temp', exist_ok=True)
-    
-    bot = PosterBot()
-    bot.run() 
+    while True:
+        try:
+            # Create necessary directories
+            os.makedirs('assets', exist_ok=True)
+            os.makedirs('temp', exist_ok=True)
+            
+            # Start bot
+            bot = PosterBot()
+            bot.run()
+            
+        except Exception as e:
+            print(f"Bot crashed: {e}")
+            print("Restarting bot in 10 seconds...")
+            time.sleep(10) 
