@@ -184,8 +184,37 @@ class GroupManagement:
             return
             
         chat_id = update.effective_chat.id
+        user_id = update.message.from_user.id
+        
+        # Check if waiting for website link
+        if context.user_data.get('waiting_for_website'):
+            if not self.is_admin(update):
+                update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+                return
+                
+            website_link = update.message.text
+            if not website_link.startswith(('http://', 'https://')):
+                update.message.reply_text("দয়া করে একটি সঠিক লিংক দিন (http:// বা https:// দিয়ে শুরু হওয়া)")
+                return
+                
+            settings = self.db.get_group_settings(chat_id)
+            settings['website_link'] = website_link
+            self.db.update_group_settings(chat_id, settings)
+            
+            update.message.reply_text("ওয়েবসাইট লিংক সেট করা হয়েছে!")
+            del context.user_data['waiting_for_website']
+            return
+            
         settings = self.db.get_group_settings(chat_id)
         
+        # Skip link filter for admins and owners
+        if self.is_admin(update) or user_id in OWNER_IDS:
+            return
+            
+        # Only check link filter in groups
+        if update.effective_chat.type not in ['group', 'supergroup']:
+            return
+            
         # Check link filter
         if settings.get('link_filter', False):
             text = update.message.text
@@ -207,12 +236,12 @@ class GroupManagement:
                     
                     # Delete warning after 3 seconds
                     context.job_queue.run_once(
-                        lambda _: self.delete_message_safe(chat_id, msg.message_id),
+                        lambda _: self.delete_message_safe(chat_id, msg.message_id, context.bot),
                         3
                     )
                     return
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"Error in link filter: {e}")
 
     def ban_user(self, update, context):
         if not self.is_admin(update):
@@ -320,8 +349,22 @@ class GroupManagement:
             action = parts[1]
             chat_id = int(parts[2])
             
+            # Check if user is admin
+            if not self.is_admin(query):
+                query.answer("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+                return
+                
             settings = self.db.get_group_settings(chat_id)
             
+            if action == 'website':
+                context.user_data['waiting_for_website'] = chat_id
+                query.message.reply_text(
+                    "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
+                    "উদাহরণ: https://cinemazbd.com"
+                )
+                query.answer()
+                return
+                
             if action == 'link':
                 settings['link_filter'] = not settings['link_filter']
                 self.db.update_group_settings(chat_id, settings)
@@ -337,16 +380,6 @@ class GroupManagement:
                 self.db.update_group_settings(chat_id, settings)
                 query.answer("সার্ভিস মেসেজ সেটিং আপডেট করা হয়েছে!")
                 
-            elif action == 'website':
-                query.message.reply_text(
-                    "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
-                    "উদহরণ: https://cinemazbd.com"
-                )
-                # Store the chat_id for processing the next message
-                context.user_data['waiting_for_website'] = chat_id
-                query.answer()
-                return
-            
             # Update the keyboard
             keyboard = [
                 [
