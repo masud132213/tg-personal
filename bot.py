@@ -79,9 +79,18 @@ class PosterBot:
                 'last_photo': photo,
                 'message_id': update.message.message_id
             }
-            update.message.reply_text(
-                "ছবি সেভ করা হয়েছে। এডিট করতে /i অথবা টেমপ্লেট ব্যবহার করতে /itemp কমান্ড ব্যবহার করুন।"
-            )
+            
+            # Check if user is in template generation process
+            if hasattr(self.template_generator, 'current_state') and user_id in self.template_generator.current_state:
+                # Continue with template generation
+                state = self.template_generator.current_state[user_id]
+                if state['step'] == 'title':
+                    update.message.reply_text("টাইটেল লিখুন 🎬")
+            else:
+                # Normal image save message
+                update.message.reply_text(
+                    "ছবি সেভ করা হয়েছে। এডিট করতে /i অথবা টেমপ্লেট ব্যবহার করতে /itemp কমান্ড ব্যবহার করুন।"
+                )
 
     def process_image(self, update, context, photo):
         try:
@@ -269,7 +278,7 @@ class PosterBot:
                 query.message.reply_text(details)
             
         except Exception as e:
-            query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
+            query.message.reply_text(f"বিস্তা���িত দেখাতে সমস্যা হয়েছে: {str(e)}")
 
     def process_last_image_template(self, update, context):
         # Check if admin/owner
