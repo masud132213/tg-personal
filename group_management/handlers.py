@@ -107,44 +107,66 @@ class GroupManagement:
 
     def welcome_new_member(self, update, context):
         """Welcome new members"""
-        chat_id = update.effective_chat.id
-        settings = self.db.get_group_settings(chat_id)
-        
-        if not settings.get('welcome_msg', False):
-            return
+        try:
+            chat_id = update.effective_chat.id
+            settings = self.db.get_group_settings(chat_id)
             
-        for new_member in update.message.new_chat_members:
-            if new_member.is_bot:
-                continue
+            if not settings.get('welcome_msg', False):
+                return
                 
-            website_link = settings.get('website_link', '')
-            message, buttons = self.welcome.get_random_template(new_member.first_name, website_link)
-            
-            # Create InlineKeyboardMarkup from buttons
-            if buttons:
-                keyboard = [[InlineKeyboardButton(text=btn['text'], url=btn['url'])] for btn in buttons]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-            else:
-                reply_markup = None
-            
-            # Send welcome message and delete after 3 seconds
-            welcome_msg = update.message.reply_text(
-                message,
-                reply_markup=reply_markup
-            )
-            
-            if settings.get('clean_service', False):
-                context.job_queue.run_once(
-                    lambda _: self.delete_message_safe(chat_id, welcome_msg.message_id),
-                    3
+            for new_member in update.message.new_chat_members:
+                if new_member.is_bot:
+                    continue
+                    
+                website_link = settings.get('website_link', '')
+                message, buttons = self.welcome.get_random_template(new_member.first_name, website_link)
+                
+                # Create InlineKeyboardMarkup from buttons
+                if buttons:
+                    keyboard = []
+                    for button in buttons:
+                        keyboard.append([
+                            InlineKeyboardButton(
+                                text=button['text'],
+                                url=button['url']
+                            )
+                        ])
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                else:
+                    reply_markup = None
+                
+                # Send welcome message
+                welcome_msg = context.bot.send_message(
+                    chat_id=chat_id,
+                    text=message,
+                    reply_markup=reply_markup,
+                    parse_mode='HTML'
                 )
+                
+                # Delete service message if enabled
+                if settings.get('clean_service', False):
+                    try:
+                        # Delete the "X joined the group" message
+                        update.message.delete()
+                    except Exception as e:
+                        print(f"Error deleting service message: {e}")
+                
+                # Delete welcome message after 3 seconds
+                if welcome_msg:
+                    context.job_queue.run_once(
+                        lambda ctx: self.delete_message_safe(chat_id, welcome_msg.message_id, context.bot),
+                        3
+                    )
+                    
+        except Exception as e:
+            print(f"Error in welcome_new_member: {e}")
 
-    def delete_message_safe(self, chat_id, message_id):
+    def delete_message_safe(self, chat_id, message_id, bot):
         """Safely delete a message"""
         try:
-            self.bot.updater.bot.delete_message(chat_id, message_id)
-        except Exception:
-            pass
+            bot.delete_message(chat_id, message_id)
+        except Exception as e:
+            print(f"Error deleting message: {e}")
 
     def handle_message(self, update, context):
         """Handle regular messages"""
