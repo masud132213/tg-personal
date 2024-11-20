@@ -6,6 +6,7 @@ from image_processor import ImageProcessor
 import psutil, platform
 from datetime import datetime
 from group_management.handlers import GroupManagement
+from template_generator.generator import TemplateGenerator
 
 OWNER_IDS = [7202314047, 1826754085]
 AUTHORIZED_CHATS = [-1002385279104]
@@ -25,6 +26,8 @@ class PosterBot:
         # Setup all handlers
         self._setup_handlers()
         
+        self.template_generator = TemplateGenerator()
+        
     def _setup_handlers(self):
         """Setup all command handlers"""
         # Group management handlers
@@ -40,6 +43,7 @@ class PosterBot:
         self.dp.add_handler(MessageHandler(Filters.photo, self.save_image))
         self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.process_image_url))
         self.dp.add_handler(CallbackQueryHandler(self.button_callback))
+        self.dp.add_handler(CommandHandler("t", self.start_template))
         
         # Update start message to include group command
         self.start_message = (
@@ -394,6 +398,65 @@ class PosterBot:
             return chat_member.status in ['creator', 'administrator']
         except Exception:
             return False
+
+    def start_template(self, update, context):
+        """Start template generation process"""
+        user_id = update.effective_user.id
+        
+        # Check if authorized
+        if not self.is_authorized(update):
+            update.message.reply_text("আপনি এই কমান্ড ব্যবহার করতে অনুমোদিত নন।")
+            return
+            
+        response = self.template_generator.start_template(user_id)
+        update.message.reply_text(response)
+        
+    def handle_template_callback(self, update, context):
+        """Handle template selection"""
+        query = update.callback_query
+        data = query.data
+        
+        if data.startswith('template_'):
+            _, template_num, user_id = data.split('_')
+            user_id = int(user_id)
+            
+            if user_id != update.effective_user.id:
+                query.answer("এই টেমপ্লেট আপনার জন্য নয়!")
+                return
+                
+            # Generate template
+            result = self.template_generator.generate_template(
+                template_num,
+                user_id,
+                self.user_states[user_id]['last_photo']
+            )
+            
+            if result:
+                img, button_text, link = result
+                
+                # Save temporary image
+                temp_path = f"temp/template_{user_id}.jpg"
+                img.save(temp_path)
+                
+                # Create button
+                keyboard = [[InlineKeyboardButton(button_text, url=link)]]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                
+                # Send image with button
+                with open(temp_path, 'rb') as photo:
+                    query.message.reply_photo(
+                        photo,
+                        reply_markup=reply_markup
+                    )
+                    
+                # Cleanup
+                os.remove(temp_path)
+                
+                # Clear user state
+                del self.template_generator.current_state[user_id]
+                
+            query.answer()
+            query.message.delete()
 
     def run(self):
         # Start the bot first
