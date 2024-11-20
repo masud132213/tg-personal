@@ -86,9 +86,9 @@ class ImageProcessor:
             # Subtitle text
             sub_font_size = int(img.width * 0.045)  # Slightly increased
             sub_font = ImageFont.truetype(self.font_path, sub_font_size)
-            sub_text = "আপনার পছন্দের সব মুভি/সিরিজ"
+            sub_text = "আপনার পছন্দের সব মুভি / সিরিজ"
             sub_text_width = draw.textlength(sub_text, font=sub_font)
-            sub_text_position = (int((img.width - sub_text_width) / 2), main_text_position[1] - sub_font_size - 15)
+            sub_text_position = (int((img.width - sub_text_width) / 2), main_text_position[1] - sub_font_size - 10)
             
             # Add shadow to subtitle
             for offset in [(x, y) for x in range(-2, 3) for y in range(-2, 3)]:
