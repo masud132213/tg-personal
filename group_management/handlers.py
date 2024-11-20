@@ -38,7 +38,7 @@ class GroupManagement:
         dispatcher.add_handler(CommandHandler('ban', self.ban_user))
         dispatcher.add_handler(CommandHandler('mute', self.mute_user))
         dispatcher.add_handler(CommandHandler('setwebsite', self.set_website))
-        dispatcher.add_handler(CallbackQueryHandler(self.button_callback, pattern='^group_'))
+        dispatcher.add_handler(CallbackQueryHandler(self.handle_callback_query, pattern='^group_'))
         dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome_new_member))
         dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_message))
 
@@ -49,6 +49,13 @@ class GroupManagement:
             return
             
         chat_id = update.effective_chat.id
+        
+        # Check bot permissions
+        has_permissions, message = self.check_bot_permissions(chat_id, context)
+        if not has_permissions:
+            update.message.reply_text(message)
+            return
+            
         settings = self.db.get_group_settings(chat_id)
         
         keyboard = [
@@ -111,23 +118,34 @@ class GroupManagement:
             chat_id = update.effective_chat.id
             print(f"New member in chat: {chat_id}")
             
+            # Get group settings
             settings = self.db.get_group_settings(chat_id)
             print(f"Group settings: {settings}")
             
-            if not settings.get('welcome_msg', False):
+            # Check if welcome message is enabled
+            if not settings.get('welcome_msg', True):  # Default to True
                 print("Welcome message is disabled")
                 return
                 
-            for new_member in update.message.new_chat_members:
+            # Get new members
+            new_members = update.message.new_chat_members
+            print(f"New members: {new_members}")
+            
+            for new_member in new_members:
+                # Skip if member is a bot
                 if new_member.is_bot:
                     print("New member is a bot, skipping")
                     continue
                     
                 print(f"Welcoming user: {new_member.first_name}")
+                
+                # Get website link from settings
                 website_link = settings.get('website_link', 'https://t.me/cinemazbd_pm')
+                
+                # Get welcome message and buttons
                 message, buttons = self.welcome.get_random_template(new_member.first_name, website_link)
                 
-                # Create InlineKeyboardMarkup from buttons
+                # Create keyboard markup
                 keyboard = []
                 if buttons:
                     for button in buttons:
@@ -139,32 +157,33 @@ class GroupManagement:
                         ])
                 reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
                 
-                # Send welcome message
                 try:
+                    # Send welcome message
                     welcome_msg = context.bot.send_message(
                         chat_id=chat_id,
                         text=message,
                         reply_markup=reply_markup,
-                        parse_mode='HTML'
+                        parse_mode='HTML',
+                        disable_web_page_preview=True
                     )
                     print("Welcome message sent successfully")
                     
                     # Delete service message if enabled
-                    if settings.get('clean_service', False):
+                    if settings.get('clean_service', True):  # Default to True
                         try:
                             update.message.delete()
                             print("Service message deleted")
                         except Exception as e:
                             print(f"Error deleting service message: {e}")
                     
-                    # Schedule message deletion
+                    # Schedule welcome message deletion
                     if welcome_msg:
                         context.job_queue.run_once(
                             lambda ctx: self.delete_message_safe(chat_id, welcome_msg.message_id, context.bot),
-                            3,
-                            context=welcome_msg.message_id
+                            3
                         )
                         print("Message deletion scheduled")
+                        
                 except Exception as e:
                     print(f"Error sending welcome message: {e}")
                     
@@ -338,49 +357,84 @@ class GroupManagement:
                 )
                 
         except Exception as e:
-            update.message.reply_text(f"মিউট করতে সমস্যা হয়েছে: {str(e)}")
+            update.message.reply_text(f"মিউট করত সমস্যা হয়েছে: {str(e)}")
 
-    def button_callback(self, update, context):
-        query = update.callback_query
-        data = query.data
-        
-        if data.startswith('group_'):
-            parts = data.split('_')
-            action = parts[1]
-            chat_id = int(parts[2])
-            
-            # Check if user is admin
-            if not self.is_admin(query):
-                query.answer("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
-                return
-                
-            settings = self.db.get_group_settings(chat_id)
-            
-            if action == 'website':
-                context.user_data['waiting_for_website'] = chat_id
-                query.message.reply_text(
-                    "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
-                    "উদাহরণ: https://cinemazbd.com"
-                )
-                query.answer()
-                return
-                
+    def button_callback(self, query, chat_id, action, settings):
+        """Handle button callbacks"""
+        try:
             if action == 'link':
                 settings['link_filter'] = not settings['link_filter']
                 self.db.update_group_settings(chat_id, settings)
-                query.answer("লিংক ফিল্টার আপডেট করা হয়েছে!")
+                return "লিংক ফিল্টার আপডেট করা হয়েছে!"
                 
             elif action == 'welcome':
                 settings['welcome_msg'] = not settings['welcome_msg']
                 self.db.update_group_settings(chat_id, settings)
-                query.answer("ওয়েলকাম মেসেজ আপডেট করা হয়েছে!")
+                return "ওয়েলকাম মেসেজ আপডেট করা হয়েছে!"
                 
             elif action == 'service':
                 settings['clean_service'] = not settings['clean_service']
                 self.db.update_group_settings(chat_id, settings)
-                query.answer("সার্ভিস মেসেজ সেটিং আপডেট করা হয়েছে!")
+                return "সার্ভিস মেসেজ সেটিং আপডেট করা হয়েছে!"
                 
-            # Update the keyboard
+            elif action == 'website':
+                query.message.reply_text(
+                    "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
+                    "উদাহরণ: https://t.me/cinemazbd_pm"
+                )
+                return None
+                
+            elif action == 'banword':
+                query.message.reply_text(
+                    "দয়া করে ব্যান করার জন্য শব্দ লিখুন।\n"
+                    "একাধিক শব্দ কমা দিয়ে আলাদা করুন।"
+                )
+                return None
+                
+            elif action == 'banuser':
+                banned_users = settings.get('banned_users', [])
+                user_list = "\n".join([f"• {uid}" for uid in banned_users]) or "কোন ইউজার ব্যান করা হয়নি"
+                query.message.reply_text(f"ব্যান করা ইউজারের তালিকা:\n{user_list}")
+                return None
+                
+            elif action == 'mute':
+                muted_users = settings.get('muted_users', [])
+                user_list = "\n".join([f"• {uid}" for uid in muted_users]) or "কোন ইউজার মিউট করা হয়নি"
+                query.message.reply_text(f"মিউট করা ইউজারের তালিকা:\n{user_list}")
+                return None
+                
+        except Exception as e:
+            print(f"Error in button callback: {e}")
+            return "একটি সমস্যা হয়েছে!"
+
+    def handle_callback_query(self, update, context):
+        """Handle callback queries"""
+        query = update.callback_query
+        
+        if not query.data.startswith('group_'):
+            return
+            
+        parts = query.data.split('_')
+        if len(parts) < 3:
+            return
+            
+        action = parts[1]
+        chat_id = int(parts[2])
+        
+        # Check if user is admin
+        if not self.is_admin(query):
+            query.answer("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+            return
+            
+        settings = self.db.get_group_settings(chat_id)
+        
+        # Handle the button press
+        result = self.button_callback(query, chat_id, action, settings)
+        if result:
+            query.answer(result)
+        
+        # Update keyboard if needed
+        if action not in ['website', 'banword']:
             keyboard = [
                 [
                     InlineKeyboardButton(
@@ -412,8 +466,37 @@ class GroupManagement:
                     )
                 ]
             ]
-            
             reply_markup = InlineKeyboardMarkup(keyboard)
             query.message.edit_reply_markup(reply_markup=reply_markup)
+
+    def check_bot_permissions(self, chat_id, context):
+        """Check if bot has all required permissions"""
+        try:
+            bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
+            
+            required_permissions = {
+                'can_delete_messages': 'Delete messages',
+                'can_send_messages': 'Send messages',
+                'can_pin_messages': 'Pin messages',
+                'can_manage_video_chats': 'Manage video chats',
+                'can_invite_users': 'Invite users via link',
+                'can_restrict_members': 'Ban/Mute users',
+                'can_change_info': 'Change group info',
+                'can_add_web_page_previews': 'Add web page previews'
+            }
+            
+            missing_permissions = []
+            for perm, name in required_permissions.items():
+                if not getattr(bot_member, perm, False):
+                    missing_permissions.append(name)
+            
+            if missing_permissions:
+                return (False, f"বট এর নিম্নলিখিত পারমিশন নেই:\n" + "\n".join(f"• {p}" for p in missing_permissions))
+            
+            return (True, "সব পারমিশন আছে!")
+            
+        except Exception as e:
+            print(f"Error checking permissions: {e}")
+            return (False, "পারমিশন চেক করতে সমস্যা হয়েছে!")
 
     # Continue in next message due to length... 
