@@ -109,23 +109,22 @@ class GroupManagement:
         """Welcome new members"""
         try:
             chat_id = update.effective_chat.id
-            settings = self.db.get_group_settings(chat_id)
+            print(f"New member in chat: {chat_id}")
             
-            # Print for debugging
-            print(f"Welcome message status: {settings.get('welcome_msg', False)}")
-            print(f"New members: {update.message.new_chat_members}")
+            settings = self.db.get_group_settings(chat_id)
+            print(f"Group settings: {settings}")
             
             if not settings.get('welcome_msg', False):
+                print("Welcome message is disabled")
                 return
                 
             for new_member in update.message.new_chat_members:
                 if new_member.is_bot:
+                    print("New member is a bot, skipping")
                     continue
                     
-                website_link = "https://t.me/cinemazbd_pm"  # Default group link
-                if settings.get('website_link'):
-                    website_link = settings.get('website_link')
-                    
+                print(f"Welcoming user: {new_member.first_name}")
+                website_link = settings.get('website_link', 'https://t.me/cinemazbd_pm')
                 message, buttons = self.welcome.get_random_template(new_member.first_name, website_link)
                 
                 # Create InlineKeyboardMarkup from buttons
@@ -141,27 +140,33 @@ class GroupManagement:
                 reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
                 
                 # Send welcome message
-                welcome_msg = context.bot.send_message(
-                    chat_id=chat_id,
-                    text=message,
-                    reply_markup=reply_markup,
-                    parse_mode='HTML'
-                )
-                
-                # Delete service message if enabled
-                if settings.get('clean_service', False):
-                    try:
-                        update.message.delete()
-                    except Exception as e:
-                        print(f"Error deleting service message: {e}")
-                
-                # Schedule message deletion
-                if welcome_msg:
-                    context.job_queue.run_once(
-                        lambda ctx: self.delete_message_safe(chat_id, welcome_msg.message_id, context.bot),
-                        3,
-                        context=welcome_msg.message_id
+                try:
+                    welcome_msg = context.bot.send_message(
+                        chat_id=chat_id,
+                        text=message,
+                        reply_markup=reply_markup,
+                        parse_mode='HTML'
                     )
+                    print("Welcome message sent successfully")
+                    
+                    # Delete service message if enabled
+                    if settings.get('clean_service', False):
+                        try:
+                            update.message.delete()
+                            print("Service message deleted")
+                        except Exception as e:
+                            print(f"Error deleting service message: {e}")
+                    
+                    # Schedule message deletion
+                    if welcome_msg:
+                        context.job_queue.run_once(
+                            lambda ctx: self.delete_message_safe(chat_id, welcome_msg.message_id, context.bot),
+                            3,
+                            context=welcome_msg.message_id
+                        )
+                        print("Message deletion scheduled")
+                except Exception as e:
+                    print(f"Error sending welcome message: {e}")
                     
         except Exception as e:
             print(f"Error in welcome_new_member: {e}")
@@ -335,7 +340,7 @@ class GroupManagement:
             elif action == 'website':
                 query.message.reply_text(
                     "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
-                    "উদ���হরণ: https://cinemazbd.com"
+                    "উদহরণ: https://cinemazbd.com"
                 )
                 # Store the chat_id for processing the next message
                 context.user_data['waiting_for_website'] = chat_id
