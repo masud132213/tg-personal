@@ -474,24 +474,21 @@ class GroupManagement:
         try:
             bot_member = context.bot.get_chat_member(chat_id, context.bot.id)
             
-            required_permissions = {
-                'can_delete_messages': 'Delete messages',
-                'can_send_messages': 'Send messages',
-                'can_pin_messages': 'Pin messages',
-                'can_manage_video_chats': 'Manage video chats',
-                'can_invite_users': 'Invite users via link',
-                'can_restrict_members': 'Ban/Mute users',
-                'can_change_info': 'Change group info',
-                'can_add_web_page_previews': 'Add web page previews'
-            }
+            # Check if bot is admin
+            if bot_member.status not in ['administrator', 'creator']:
+                return (False, "বট কে অ্যাডমিন করা হয়নি!")
             
-            missing_permissions = []
-            for perm, name in required_permissions.items():
-                if not getattr(bot_member, perm, False):
-                    missing_permissions.append(name)
+            # Get bot permissions
+            permissions = bot_member.can_delete_messages, bot_member.can_restrict_members
             
-            if missing_permissions:
-                return (False, f"বট এর নিম্নলিখিত পারমিশন নেই:\n" + "\n".join(f"• {p}" for p in missing_permissions))
+            if not all(permissions):
+                missing = []
+                if not bot_member.can_delete_messages:
+                    missing.append("Delete messages")
+                if not bot_member.can_restrict_members:
+                    missing.append("Ban/Mute users")
+                
+                return (False, f"বট এর নিম্নলিখিত পারমিশন নেই:\n" + "\n".join(f"• {p}" for p in missing))
             
             return (True, "সব পারমিশন আছে!")
             
