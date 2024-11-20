@@ -5,7 +5,6 @@ import os, tempfile, requests, json
 from image_processor import ImageProcessor
 import psutil, platform
 from datetime import datetime
-from group_management.handlers import GroupManagement
 from template_generator.generator import TemplateGenerator
 
 OWNER_IDS = [7202314047, 1826754085]
@@ -19,42 +18,34 @@ class PosterBot:
         self.dp = self.updater.dispatcher
         self.image_processor = ImageProcessor()
         self.user_states = {}
-        
-        # Initialize group management
-        self.group_manager = GroupManagement(self)
-        
-        # Setup all handlers
-        self._setup_handlers()
-        
         self.template_generator = TemplateGenerator()
+        
+        # Setup handlers
+        self._setup_handlers()
         
     def _setup_handlers(self):
         """Setup all command handlers"""
-        # Group management handlers
-        self.group_manager.setup_handlers(self.dp)
-        
-        # Other handlers
         self.dp.add_handler(CommandHandler("start", self.start))
         self.dp.add_handler(CommandHandler("stats", self.stats))
         self.dp.add_handler(CommandHandler("tm", self.search_movie))
         self.dp.add_handler(CommandHandler("tt", self.search_tv))
         self.dp.add_handler(CommandHandler("i", self.process_last_image))
         self.dp.add_handler(CommandHandler("itemp", self.process_last_image_template))
+        self.dp.add_handler(CommandHandler("t", self.start_template))
         self.dp.add_handler(MessageHandler(Filters.photo, self.save_image))
         self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.process_image_url))
-        self.dp.add_handler(CallbackQueryHandler(self.button_callback))
-        self.dp.add_handler(CommandHandler("t", self.start_template))
+        self.dp.add_handler(CallbackQueryHandler(self.handle_template_callback))
         
-        # Update start message to include group command
+        # Update start message
         self.start_message = (
             "স্বাগতম! আমি আপনার পোস্টার এডিট করতে পারি।\n\n"
             "কমান্ডসমূহ:\n"
             "/i - সর্বশেষ ছবিতে লোগো যোগ করুন\n"
             "/itemp - টেমপ্লেট সহ এডিট করুন\n"
+            "/t - নতুন টেমপ্লেট তৈরি করুন\n"
             "/tm movie_name - মুভি সার্চ করুন\n"
             "/tt series_name - টিভি সিরিজ সার্চ করুন\n"
-            "/stats - সার্ভার স্ট্যাটস দেখুন\n"
-            "/group - গ্রুপ সেটিংস (শুধু অ্যাডমিনদের জন্য)"
+            "/stats - সার্ভার স্ট্যাটস দেখুন"
         )
 
     def start(self, update, context):
@@ -459,11 +450,11 @@ class PosterBot:
             query.message.delete()
 
     def run(self):
-        # Start the bot first
+        # Start the bot
         self.updater.start_polling()
         print("Bot is running...")
 
-        # Then start health check server
+        # Start health check server
         from http.server import HTTPServer, BaseHTTPRequestHandler
         
         class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -474,7 +465,6 @@ class PosterBot:
                 self.wfile.write(b"OK")
             
             def log_message(self, format, *args):
-                # Suppress logging
                 pass
 
         def run_health_server():
