@@ -22,29 +22,38 @@ class TemplateGenerator:
         
     def process_step(self, user_id, text):
         """Process each step of template generation"""
+        print(f"Processing step for user {user_id}")
+        print(f"Text received: {text}")
+        
         if user_id not in self.current_state:
+            print("User not in current_state")
             return "দয়া করে আগে /t কমান্ড দিয়ে শুরু করুন।"
             
         state = self.current_state[user_id]
+        print(f"Current state: {state}")
         
         if state['step'] == 'title':
             state['title'] = text
             state['step'] = 'genres'
+            print("Moving to genres step")
             return "জনরা লিখুন (উদাহরণ: Action, Adventure) 🎭"
             
         elif state['step'] == 'genres':
             state['genres'] = text
             state['step'] = 'quality'
+            print("Moving to quality step")
             return "কোয়ালিটি লিখুন (উদাহরণ: 4K HDR, 1080p) ✨"
             
         elif state['step'] == 'quality':
             state['quality'] = text
             state['step'] = 'link'
+            print("Moving to link step")
             return "ডাউনলোড লিংক দিন 🔗"
             
         elif state['step'] == 'link':
             state['link'] = text
             state['step'] = 'template'
+            print("Moving to template selection")
             
             # Create template selection keyboard
             keyboard = []

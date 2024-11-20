@@ -466,7 +466,12 @@ class PosterBot:
         
         # Check if user is in template generation process
         if hasattr(self.template_generator, 'current_state') and user_id in self.template_generator.current_state:
+            print(f"Processing template step for user {user_id}")
+            print(f"Current state: {self.template_generator.current_state[user_id]}")
+            
             response = self.template_generator.process_step(user_id, text)
+            print(f"Template generator response: {response}")
+            
             if isinstance(response, tuple):
                 message, reply_markup = response
                 update.message.reply_text(message, reply_markup=reply_markup)
@@ -475,15 +480,18 @@ class PosterBot:
 
     def run(self):
         try:
-            # Stop any existing instances
-            self.updater.stop()
-        except:
-            pass
+            # Create a unique name for this bot instance
+            import uuid
+            instance_name = str(uuid.uuid4())
             
-        try:
-            # Start the bot
-            self.updater.start_polling(drop_pending_updates=True)
-            print("Bot is running...")
+            # Start the bot with unique name and clean start
+            self.updater.start_polling(
+                drop_pending_updates=True,
+                bootstrap_retries=-1,
+                allowed_updates=['message', 'callback_query'],
+                timeout=30
+            )
+            print(f"Bot instance {instance_name} is running...")
 
             # Start health check server
             from http.server import HTTPServer, BaseHTTPRequestHandler
