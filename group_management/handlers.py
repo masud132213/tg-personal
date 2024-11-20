@@ -18,6 +18,21 @@ class GroupManagement:
         bot.dispatcher.add_handler(CommandHandler('mute', self.mute_user))
         bot.dispatcher.add_handler(CallbackQueryHandler(self.button_callback, pattern='^group_'))
         
+    def is_admin(self, update):
+        """Check if user is admin in the group"""
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Check if user is in OWNER_IDS
+        if user_id in [7202314047, 1826754085]:
+            return True
+            
+        try:
+            chat_member = update.effective_chat.get_member(user_id)
+            return chat_member.status in ['creator', 'administrator']
+        except Exception:
+            return False
+            
     def group_settings(self, update, context):
         if not self.is_admin(update):
             update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")

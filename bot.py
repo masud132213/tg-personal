@@ -5,6 +5,7 @@ import os, tempfile, requests, json
 from image_processor import ImageProcessor
 import psutil, platform
 from datetime import datetime
+from group_management.handlers import GroupManagement
 
 OWNER_IDS = [7202314047, 1826754085]
 AUTHORIZED_CHATS = [-1002385279104]
@@ -18,6 +19,9 @@ class PosterBot:
         self.image_processor = ImageProcessor()
         self.user_states = {}  # Store user states
         
+        # Initialize group management
+        self.group_manager = GroupManagement(self)
+        
         # Command handlers
         self.dp.add_handler(CommandHandler("start", self.start))
         self.dp.add_handler(CommandHandler("stats", self.stats))
@@ -25,20 +29,25 @@ class PosterBot:
         self.dp.add_handler(CommandHandler("tt", self.search_tv))
         self.dp.add_handler(CommandHandler("i", self.process_last_image))
         self.dp.add_handler(CommandHandler("itemp", self.process_last_image_template))
+        self.dp.add_handler(CommandHandler("group", self.group_manager.group_settings))
         self.dp.add_handler(MessageHandler(Filters.photo, self.save_image))
         self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.process_image_url))
         self.dp.add_handler(CallbackQueryHandler(self.button_callback))
         
-    def start(self, update, context):
-        update.message.reply_text(
+        # Update start message to include group command
+        self.start_message = (
             "স্বাগতম! আমি আপনার পোস্টার এডিট করতে পারি।\n\n"
             "কমান্ডসমূহ:\n"
             "/i - সর্বশেষ ছবিতে লোগো যোগ করুন\n"
             "/itemp - টেমপ্লেট সহ এডিট করুন\n"
             "/tm movie_name - মুভি সার্চ করুন\n"
             "/tt series_name - টিভি সিরিজ সার্চ করুন\n"
-            "/stats - সার্ভার স্ট্যাটস দেখুন"
+            "/stats - সার্ভার স্ট্যাটস দেখুন\n"
+            "/group - গ্রুপ সেটিংস (শুধু অ্যাডমিনদের জন্য)"
         )
+
+    def start(self, update, context):
+        update.message.reply_text(self.start_message)
 
     def stats(self, update, context):
         cpu = psutil.cpu_percent()
