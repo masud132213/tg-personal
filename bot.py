@@ -44,7 +44,7 @@ class PosterBot:
         uptime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
         stats_text = (
-            f"🖥 সার্ভার স���ট্যাটস:\n\n"
+            f"🖥 সার্ভার সট্যাটস:\n\n"
             f"CPU: {cpu}%\n"
             f"Memory: {memory}%\n"
             f"Disk: {disk}%\n"
@@ -202,6 +202,69 @@ class PosterBot:
     def process_last_image_template(self, update, context):
         # Will implement template processing later
         update.message.reply_text("টেমপ্লেট ফিচার শীঘ্রই আসছে!")
+
+    def search_tv(self, update, context):
+        query = ' '.join(context.args)
+        if not query:
+            update.message.reply_text("দয়া করে একটি টিভি সিরিজের নাম লিখুন।")
+            return
+        
+        url = f"https://api.themoviedb.org/3/search/tv"
+        params = {
+            'api_key': self.tmdb_api_key,
+            'query': query,
+            'language': 'en-US',
+            'page': 1
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            results = response.json()['results'][:5]
+            
+            if not results:
+                update.message.reply_text("কোন টিভি সিরিজ পাওয়া যায়নি।")
+                return
+            
+            keyboard = []
+            for show in results:
+                callback_data = f"tv_{show['id']}"
+                keyboard.append([InlineKeyboardButton(show['name'], callback_data=callback_data)])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            update.message.reply_text("নিচের সিরিজগুলো থেকে একটি সিলেক্ট করুন:", reply_markup=reply_markup)
+        
+        except Exception as e:
+            update.message.reply_text(f"সার্চ করতে সমস্যা হয়েছে: {str(e)}")
+
+    def show_tv_details(self, query, tv_id):
+        url = f"https://api.themoviedb.org/3/tv/{tv_id}"
+        params = {
+            'api_key': self.tmdb_api_key,
+            'language': 'en-US'
+        }
+        
+        try:
+            response = requests.get(url, params=params)
+            show = response.json()
+            
+            details = (
+                f"📺 {show['name']}\n\n"
+                f"📅 First Air: {show.get('first_air_date', 'N/A')[:4]}\n"
+                f"🌟 Rating: {show.get('vote_average', 'N/A')}/10\n"
+                f"🎭 Genres: {', '.join(genre['name'] for genre in show.get('genres', []))}\n"
+                f"📺 Seasons: {show.get('number_of_seasons', 'N/A')}\n"
+                f"🌍 Country: {show.get('origin_country', ['N/A'])[0]}\n\n"
+                f"📝 Overview: {show.get('overview', 'N/A')}"
+            )
+            
+            if show.get('poster_path'):
+                poster_url = f"https://image.tmdb.org/t/p/w500{show['poster_path']}"
+                query.message.reply_photo(poster_url, caption=details)
+            else:
+                query.message.reply_text(details)
+            
+        except Exception as e:
+            query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
 
     def run(self):
         # Start the bot first
