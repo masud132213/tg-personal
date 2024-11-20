@@ -35,6 +35,7 @@ class PosterBot:
         self.dp.add_handler(MessageHandler(Filters.photo, self.save_image))
         self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.process_image_url))
         self.dp.add_handler(CallbackQueryHandler(self.handle_template_callback))
+        self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_message))
         
         # Update start message
         self.start_message = (
@@ -278,7 +279,7 @@ class PosterBot:
                 query.message.reply_text(details)
             
         except Exception as e:
-            query.message.reply_text(f"বিস্তা���িত দেখাতে সমস্যা হয়েছে: {str(e)}")
+            query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
 
     def process_last_image_template(self, update, context):
         # Check if admin/owner
@@ -341,7 +342,7 @@ class PosterBot:
             update.message.reply_text("নিচের সিরিজগুলো থেকে একটি সিলেক্ট করুন:", reply_markup=reply_markup)
         
         except Exception as e:
-            update.message.reply_text(f"সার্চ করতে সমস্যা হয়েছে: {str(e)}")
+            update.message.reply_text(f"সার্চ করে সমস্যা হয়েছে: {str(e)}")
 
     def show_tv_details(self, query, tv_id):
         url = f"https://api.themoviedb.org/3/tv/{tv_id}"
@@ -458,38 +459,63 @@ class PosterBot:
             query.answer()
             query.message.delete()
 
-    def run(self):
-        # Start the bot
-        self.updater.start_polling()
-        print("Bot is running...")
-
-        # Start health check server
-        from http.server import HTTPServer, BaseHTTPRequestHandler
+    def handle_message(self, update, context):
+        """Handle text messages"""
+        user_id = update.effective_user.id
+        text = update.message.text
         
-        class HealthCheckHandler(BaseHTTPRequestHandler):
-            def do_GET(self):
-                self.send_response(200)
-                self.send_header('Content-type', 'text/plain')
-                self.end_headers()
-                self.wfile.write(b"OK")
+        # Check if user is in template generation process
+        if hasattr(self.template_generator, 'current_state') and user_id in self.template_generator.current_state:
+            response = self.template_generator.process_step(user_id, text)
+            if isinstance(response, tuple):
+                message, reply_markup = response
+                update.message.reply_text(message, reply_markup=reply_markup)
+            else:
+                update.message.reply_text(response)
+
+    def run(self):
+        try:
+            # Stop any existing instances
+            self.updater.stop()
+        except:
+            pass
             
-            def log_message(self, format, *args):
-                pass
+        try:
+            # Start the bot
+            self.updater.start_polling(drop_pending_updates=True)
+            print("Bot is running...")
 
-        def run_health_server():
-            try:
-                server = HTTPServer(('', 8080), HealthCheckHandler)
-                print("Health check server running on port 8080")
-                server.serve_forever()
-            except Exception as e:
-                print(f"Health server error: {e}")
+            # Start health check server
+            from http.server import HTTPServer, BaseHTTPRequestHandler
+            
+            class HealthCheckHandler(BaseHTTPRequestHandler):
+                def do_GET(self):
+                    self.send_response(200)
+                    self.send_header('Content-type', 'text/plain')
+                    self.end_headers()
+                    self.wfile.write(b"OK")
+                
+                def log_message(self, format, *args):
+                    pass
 
-        import threading
-        health_thread = threading.Thread(target=run_health_server, daemon=True)
-        health_thread.start()
+            def run_health_server():
+                try:
+                    server = HTTPServer(('', 8080), HealthCheckHandler)
+                    print("Health check server running on port 8080")
+                    server.serve_forever()
+                except Exception as e:
+                    print(f"Health server error: {e}")
 
-        # Keep the main thread running
-        self.updater.idle()
+            import threading
+            health_thread = threading.Thread(target=run_health_server, daemon=True)
+            health_thread.start()
+
+            # Keep the main thread running
+            self.updater.idle()
+            
+        except Exception as e:
+            print(f"Error starting bot: {e}")
+            raise e 
 
 if __name__ == '__main__':
     # Create necessary directories
