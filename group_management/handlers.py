@@ -111,6 +111,10 @@ class GroupManagement:
             chat_id = update.effective_chat.id
             settings = self.db.get_group_settings(chat_id)
             
+            # Print for debugging
+            print(f"Welcome message status: {settings.get('welcome_msg', False)}")
+            print(f"New members: {update.message.new_chat_members}")
+            
             if not settings.get('welcome_msg', False):
                 return
                 
@@ -118,12 +122,15 @@ class GroupManagement:
                 if new_member.is_bot:
                     continue
                     
-                website_link = settings.get('website_link', '')
+                website_link = "https://t.me/cinemazbd_pm"  # Default group link
+                if settings.get('website_link'):
+                    website_link = settings.get('website_link')
+                    
                 message, buttons = self.welcome.get_random_template(new_member.first_name, website_link)
                 
                 # Create InlineKeyboardMarkup from buttons
+                keyboard = []
                 if buttons:
-                    keyboard = []
                     for button in buttons:
                         keyboard.append([
                             InlineKeyboardButton(
@@ -131,9 +138,7 @@ class GroupManagement:
                                 url=button['url']
                             )
                         ])
-                    reply_markup = InlineKeyboardMarkup(keyboard)
-                else:
-                    reply_markup = None
+                reply_markup = InlineKeyboardMarkup(keyboard) if keyboard else None
                 
                 # Send welcome message
                 welcome_msg = context.bot.send_message(
@@ -146,16 +151,16 @@ class GroupManagement:
                 # Delete service message if enabled
                 if settings.get('clean_service', False):
                     try:
-                        # Delete the "X joined the group" message
                         update.message.delete()
                     except Exception as e:
                         print(f"Error deleting service message: {e}")
                 
-                # Delete welcome message after 3 seconds
+                # Schedule message deletion
                 if welcome_msg:
                     context.job_queue.run_once(
                         lambda ctx: self.delete_message_safe(chat_id, welcome_msg.message_id, context.bot),
-                        3
+                        3,
+                        context=welcome_msg.message_id
                     )
                     
         except Exception as e:
@@ -330,7 +335,7 @@ class GroupManagement:
             elif action == 'website':
                 query.message.reply_text(
                     "দয়া করে আপনার ওয়েবসাইট লিংক পাঠান।\n"
-                    "উদাহরণ: https://cinemazbd.com"
+                    "উদ���হরণ: https://cinemazbd.com"
                 )
                 # Store the chat_id for processing the next message
                 context.user_data['waiting_for_website'] = chat_id
