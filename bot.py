@@ -17,19 +17,26 @@ class PosterBot:
         self.updater = Updater(self.token, use_context=True)
         self.dp = self.updater.dispatcher
         self.image_processor = ImageProcessor()
-        self.user_states = {}  # Store user states
+        self.user_states = {}
         
         # Initialize group management
         self.group_manager = GroupManagement(self)
         
-        # Command handlers
+        # Setup all handlers
+        self._setup_handlers()
+        
+    def _setup_handlers(self):
+        """Setup all command handlers"""
+        # Group management handlers
+        self.group_manager.setup_handlers(self.dp)
+        
+        # Other handlers
         self.dp.add_handler(CommandHandler("start", self.start))
         self.dp.add_handler(CommandHandler("stats", self.stats))
         self.dp.add_handler(CommandHandler("tm", self.search_movie))
         self.dp.add_handler(CommandHandler("tt", self.search_tv))
         self.dp.add_handler(CommandHandler("i", self.process_last_image))
         self.dp.add_handler(CommandHandler("itemp", self.process_last_image_template))
-        self.dp.add_handler(CommandHandler("group", self.group_manager.group_settings))
         self.dp.add_handler(MessageHandler(Filters.photo, self.save_image))
         self.dp.add_handler(MessageHandler(Filters.text & ~Filters.command, self.process_image_url))
         self.dp.add_handler(CallbackQueryHandler(self.button_callback))

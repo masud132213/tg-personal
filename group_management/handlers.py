@@ -12,12 +12,15 @@ class GroupManagement:
         self.welcome = WelcomeManager()
         self.filter = MessageFilter(self.db)
         
-        # Add handlers
-        bot.dispatcher.add_handler(CommandHandler('group', self.group_settings))
-        bot.dispatcher.add_handler(CommandHandler('ban', self.ban_user))
-        bot.dispatcher.add_handler(CommandHandler('mute', self.mute_user))
-        bot.dispatcher.add_handler(CallbackQueryHandler(self.button_callback, pattern='^group_'))
+        # We'll add handlers later in setup_handlers method
         
+    def setup_handlers(self, dispatcher):
+        """Setup all handlers after dispatcher is ready"""
+        dispatcher.add_handler(CommandHandler('group', self.group_settings))
+        dispatcher.add_handler(CommandHandler('ban', self.ban_user))
+        dispatcher.add_handler(CommandHandler('mute', self.mute_user))
+        dispatcher.add_handler(CallbackQueryHandler(self.button_callback, pattern='^group_'))
+
     def is_admin(self, update):
         """Check if user is admin in the group"""
         user_id = update.effective_user.id
