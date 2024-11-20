@@ -6,6 +6,9 @@ from image_processor import ImageProcessor
 import psutil, platform
 from datetime import datetime
 
+OWNER_IDS = [7202314047, 1826754085]
+AUTHORIZED_CHATS = [-1002385279104]
+
 class PosterBot:
     def __init__(self):
         self.token = os.environ.get("BOT_TOKEN", "YOUR_BOT_TOKEN")
@@ -127,6 +130,10 @@ class PosterBot:
                 update.message.reply_text(f"ছবি প্রসেস করতে সমস্যা হয়েছে: {str(e)}")
 
     def search_movie(self, update, context):
+        if not self.is_authorized(update):
+            update.message.reply_text("আপনি এই কমান্ড ব্যবহার করতে অনুমোদিত নন।")
+            return
+
         query = ' '.join(context.args)
         if not query:
             update.message.reply_text("দয়া করে একটি মুভির নাম লিখুন।")
@@ -150,8 +157,10 @@ class PosterBot:
             
             keyboard = []
             for movie in results:
+                year = movie.get('release_date', '')[:4]
+                title = f"{movie['title']} ({year})" if year else movie['title']
                 callback_data = f"movie_{movie['id']}"
-                keyboard.append([InlineKeyboardButton(movie['title'], callback_data=callback_data)])
+                keyboard.append([InlineKeyboardButton(title, callback_data=callback_data)])
             
             reply_markup = InlineKeyboardMarkup(keyboard)
             update.message.reply_text("নিচের মুভিগুলো থেকে একটি সিলেক্ট করুন:", reply_markup=reply_markup)
@@ -200,10 +209,44 @@ class PosterBot:
             query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
 
     def process_last_image_template(self, update, context):
-        # Will implement template processing later
-        update.message.reply_text("টেমপ্লেট ফিচার শীঘ্রই আসছে!")
+        user_id = update.message.from_user.id
+        if user_id not in self.user_states:
+            update.message.reply_text("দয়া করে আগে একটি ছবি পাঠান।")
+            return
+        
+        try:
+            photo = self.user_states[user_id]['last_photo']
+            file = context.bot.get_file(photo.file_id)
+            
+            # Create temp directory if it doesn't exist
+            if not os.path.exists('temp'):
+                os.makedirs('temp')
+            
+            # Download and save the image
+            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg', dir='temp')
+            file.download(temp_file.name)
+            
+            # Process the image with template
+            processed_img = self.image_processor.apply_template(temp_file.name, "movie")
+            output_path = temp_file.name.replace('.jpg', '_processed.jpg')
+            processed_img.save(output_path)
+            
+            # Send the processed image
+            with open(output_path, 'rb') as photo_file:
+                update.message.reply_photo(photo_file)
+            
+            # Cleanup
+            os.unlink(temp_file.name)
+            os.unlink(output_path)
+            
+        except Exception as e:
+            update.message.reply_text(f"টেমপ্লেট প্রসেস করতে সমস্যা হয়েছে: {str(e)}")
 
     def search_tv(self, update, context):
+        if not self.is_authorized(update):
+            update.message.reply_text("আপনি এই কমান্ড ব্যবহার করতে অনুমোদিত নন।")
+            return
+        
         query = ' '.join(context.args)
         if not query:
             update.message.reply_text("দয়া করে একটি টিভি সিরিজের নাম লিখুন।")
@@ -265,6 +308,16 @@ class PosterBot:
             
         except Exception as e:
             query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
+
+    def is_authorized(self, update):
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        if user_id in OWNER_IDS:
+            return True
+        if chat_id in AUTHORIZED_CHATS:
+            return True
+        return False
 
     def run(self):
         # Start the bot first
