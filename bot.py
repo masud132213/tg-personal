@@ -73,15 +73,20 @@ class PosterBot:
         update.message.reply_text(stats_text)
 
     def save_image(self, update, context):
+        """Save image for processing"""
+        chat_id = update.effective_chat.id
         user_id = update.message.from_user.id
-        photo = update.message.photo[-1]
-        self.user_states[user_id] = {
-            'last_photo': photo,
-            'message_id': update.message.message_id
-        }
-        update.message.reply_text(
-            "ছবি সেভ করা হয়েছে। এডিট করতে /i অথবা টেমপ্লেট ব্যবহার করতে /itemp কমান্ড ব্যবহার করুন।"
-        )
+        
+        # Only allow in private chat with sudo users
+        if update.effective_chat.type == 'private' and user_id in OWNER_IDS:
+            photo = update.message.photo[-1]
+            self.user_states[user_id] = {
+                'last_photo': photo,
+                'message_id': update.message.message_id
+            }
+            update.message.reply_text(
+                "ছবি সেভ করা হয়েছে। এডিট করতে /i অথবা টেমপ্লেট ব্যবহার করতে /itemp কমান্ড ব্যবহার করুন।"
+            )
 
     def process_image(self, update, context, photo):
         try:
@@ -113,6 +118,11 @@ class PosterBot:
             update.message.reply_text(f"ছবি প্রসেস করতে সমস্যা হয়েছে: {str(e)}")
 
     def process_last_image(self, update, context):
+        # Check if admin/owner
+        if not self.is_admin_or_owner(update):
+            update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+            return
+            
         user_id = update.message.from_user.id
         if user_id not in self.user_states:
             update.message.reply_text("দয়া করে আগে একটি ছবি পাঠান।")
@@ -267,6 +277,11 @@ class PosterBot:
             query.message.reply_text(f"বিস্তারিত দেখাতে সমস্যা হয়েছে: {str(e)}")
 
     def process_last_image_template(self, update, context):
+        # Check if admin/owner
+        if not self.is_admin_or_owner(update):
+            update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+            return
+            
         user_id = update.message.from_user.id
         if user_id not in self.user_states:
             update.message.reply_text("দয়া করে আগে একটি ছবি পাঠান।")
@@ -363,6 +378,22 @@ class PosterBot:
         if chat_id in AUTHORIZED_CHATS:
             return True
         return False
+
+    def is_admin_or_owner(self, update):
+        """Check if user is admin or owner"""
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Check if user is owner
+        if user_id in OWNER_IDS:
+            return True
+            
+        # Check if in group and user is admin
+        try:
+            chat_member = update.effective_chat.get_member(user_id)
+            return chat_member.status in ['creator', 'administrator']
+        except Exception:
+            return False
 
     def run(self):
         # Start the bot first

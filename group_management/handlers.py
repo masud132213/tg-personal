@@ -22,6 +22,50 @@ class GroupManagement:
         dispatcher.add_handler(MessageHandler(Filters.status_update.new_chat_members, self.welcome_new_member))
         dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, self.handle_message))
 
+    def group_settings(self, update, context):
+        """Handle /group command"""
+        if not self.is_admin(update):
+            update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+            return
+            
+        chat_id = update.effective_chat.id
+        settings = self.db.get_group_settings(chat_id)
+        
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    f"লিংক ফিল্টার: {'✅' if settings['link_filter'] else '❌'}", 
+                    callback_data=f"group_link_{chat_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton("ব্যান ওয়ার্ড", callback_data=f"group_banword_{chat_id}"),
+                InlineKeyboardButton("ব্যান ইউজার", callback_data=f"group_banuser_{chat_id}")
+            ],
+            [
+                InlineKeyboardButton("মিউট ইউজার", callback_data=f"group_mute_{chat_id}"),
+                InlineKeyboardButton(
+                    f"ওয়েলকাম: {'✅' if settings['welcome_msg'] else '❌'}", 
+                    callback_data=f"group_welcome_{chat_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"সার্ভিস মেসেজ: {'✅' if settings['clean_service'] else '❌'}", 
+                    callback_data=f"group_service_{chat_id}"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    f"ওয়েবসাইট লিংক: {'✅' if settings.get('website_link') else '❌'}", 
+                    callback_data=f"group_website_{chat_id}"
+                )
+            ]
+        ]
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        update.message.reply_text("গ্রুপ সেটিংস:", reply_markup=reply_markup)
+
     def set_website(self, update, context):
         """Set website link for the group"""
         if not self.is_admin(update):
