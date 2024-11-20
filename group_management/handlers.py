@@ -4,6 +4,10 @@ from .database import Database
 from .welcome import WelcomeManager
 from .filters import MessageFilter
 import time, re
+import os
+
+# Get owner IDs from environment
+OWNER_IDS = [7202314047, 1826754085]
 
 class GroupManagement:
     def __init__(self, bot):
@@ -12,6 +16,22 @@ class GroupManagement:
         self.welcome = WelcomeManager()
         self.filter = MessageFilter(self.db)
         
+    def is_admin(self, update):
+        """Check if user is admin or owner"""
+        user_id = update.effective_user.id
+        chat_id = update.effective_chat.id
+        
+        # Check if user is in OWNER_IDS
+        if user_id in OWNER_IDS:
+            return True
+            
+        # Check if user is admin in the group
+        try:
+            chat_member = update.effective_chat.get_member(user_id)
+            return chat_member.status in ['creator', 'administrator']
+        except Exception:
+            return False
+
     def setup_handlers(self, dispatcher):
         """Setup all handlers after dispatcher is ready"""
         dispatcher.add_handler(CommandHandler('group', self.group_settings))
