@@ -172,7 +172,49 @@ class PosterBot:
         query = update.callback_query
         data = query.data
         
-        if data.startswith('movie_'):
+        if data.startswith('template_'):
+            template_type = data.split('_')[1]
+            user_id = query.from_user.id
+            
+            if user_id not in self.user_states:
+                query.message.reply_text("দয়া করে আগে একটি ছবি পাঠান।")
+                return
+            
+            try:
+                photo = self.user_states[user_id]['last_photo']
+                file = context.bot.get_file(photo.file_id)
+                
+                # Create temp directory if it doesn't exist
+                if not os.path.exists('temp'):
+                    os.makedirs('temp')
+                
+                # Download and save the image
+                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg', dir='temp')
+                file.download(temp_file.name)
+                
+                # Process the image with selected template
+                processed_img = self.image_processor.apply_template(temp_file.name, template_type)
+                output_path = temp_file.name.replace('.jpg', '_processed.jpg')
+                processed_img.save(output_path)
+                
+                # Send the processed image
+                with open(output_path, 'rb') as photo_file:
+                    query.message.reply_photo(photo_file)
+                
+                # Cleanup
+                os.unlink(temp_file.name)
+                os.unlink(output_path)
+                
+                # Delete the template selection message
+                query.message.delete()
+                
+            except Exception as e:
+                query.message.reply_text(f"টেমপ্লেট প্রসেস করতে সমস্যা হয়েছে: {str(e)}")
+            
+            finally:
+                query.answer()
+            
+        elif data.startswith('movie_'):
             movie_id = data.split('_')[1]
             self.show_movie_details(query, movie_id)
         elif data.startswith('tv_'):
@@ -214,33 +256,20 @@ class PosterBot:
             update.message.reply_text("দয়া করে আগে একটি ছবি পাঠান।")
             return
         
-        try:
-            photo = self.user_states[user_id]['last_photo']
-            file = context.bot.get_file(photo.file_id)
-            
-            # Create temp directory if it doesn't exist
-            if not os.path.exists('temp'):
-                os.makedirs('temp')
-            
-            # Download and save the image
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg', dir='temp')
-            file.download(temp_file.name)
-            
-            # Process the image with template
-            processed_img = self.image_processor.apply_template(temp_file.name, "movie")
-            output_path = temp_file.name.replace('.jpg', '_processed.jpg')
-            processed_img.save(output_path)
-            
-            # Send the processed image
-            with open(output_path, 'rb') as photo_file:
-                update.message.reply_photo(photo_file)
-            
-            # Cleanup
-            os.unlink(temp_file.name)
-            os.unlink(output_path)
-            
-        except Exception as e:
-            update.message.reply_text(f"টেমপ্লেট প্রসেস করতে সমস্যা হয়েছে: {str(e)}")
+        # Create template selection keyboard
+        keyboard = [
+            [
+                InlineKeyboardButton("মুভি টেমপ্লেট", callback_data="template_movie"),
+                InlineKeyboardButton("সিরিজ টেমপ্লেট", callback_data="template_series")
+            ],
+            [InlineKeyboardButton("মিনিমাল টেমপ্লেট", callback_data="template_minimal")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        update.message.reply_text(
+            "টেমপ্লেট সিলেক্ট করুন:",
+            reply_markup=reply_markup
+        )
 
     def search_tv(self, update, context):
         if not self.is_authorized(update):
