@@ -18,18 +18,32 @@ class GroupManagement:
         
     def is_admin(self, update):
         """Check if user is admin or owner"""
-        user_id = update.effective_user.id
-        chat_id = update.effective_chat.id
-        
-        # Check if user is in OWNER_IDS
-        if user_id in OWNER_IDS:
-            return True
-            
-        # Check if user is admin in the group
         try:
-            chat_member = update.effective_chat.get_member(user_id)
-            return chat_member.status in ['creator', 'administrator']
-        except Exception:
+            # Handle both Update and CallbackQuery objects
+            if hasattr(update, 'callback_query'):
+                user_id = update.callback_query.from_user.id
+                chat_id = update.callback_query.message.chat.id
+            else:
+                user_id = update.effective_user.id
+                chat_id = update.effective_chat.id
+            
+            # Check if user is in OWNER_IDS
+            if user_id in OWNER_IDS:
+                return True
+                
+            # Check if user is admin in the group
+            try:
+                if hasattr(update, 'callback_query'):
+                    chat_member = update.callback_query.message.chat.get_member(user_id)
+                else:
+                    chat_member = update.effective_chat.get_member(user_id)
+                return chat_member.status in ['creator', 'administrator']
+            except Exception as e:
+                print(f"Error checking admin status: {e}")
+                return False
+                
+        except Exception as e:
+            print(f"Error in is_admin: {e}")
             return False
 
     def setup_handlers(self, dispatcher):
@@ -208,7 +222,7 @@ class GroupManagement:
         # Check if waiting for website link
         if context.user_data.get('waiting_for_website'):
             if not self.is_admin(update):
-                update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
+                update.message.reply_text("এই কমান্ড শুধু অ্যাডমিনদে�� জন্য!")
                 return
                 
             website_link = update.message.text
@@ -422,7 +436,7 @@ class GroupManagement:
         chat_id = int(parts[2])
         
         # Check if user is admin
-        if not self.is_admin(query):
+        if not self.is_admin(update):  # Pass the entire update object
             query.answer("এই কমান্ড শুধু অ্যাডমিনদের জন্য!")
             return
             
