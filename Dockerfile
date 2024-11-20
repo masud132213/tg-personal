@@ -11,11 +11,17 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Create necessary directories
+RUN mkdir -p assets temp
+
 # Copy the rest of the application
 COPY . .
 
-# Create necessary directories
-RUN mkdir -p assets temp
+# Make sure the directories exist and are writable
+RUN chmod -R 777 assets temp
+
+# Expose port for health checks
+EXPOSE 8080
 
 # Run the bot
 CMD ["python", "bot.py"] 
